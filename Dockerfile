@@ -15,7 +15,7 @@
 
     # Instalamos las dependencias necesarias
     COPY requirements.txt .
-    RUN pip install --no-cache-dir -r requirements.txt
+    RUN pip install -r requirements.txt
 
     # Los certificados se piden para conexiones SSL, aquí se actualizan
     RUN apt-get install -y --no-install-recommends ca-certificates

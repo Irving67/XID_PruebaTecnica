@@ -5,6 +5,8 @@ from flask import request
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+from utils.tools.stopwords import stopwords_filter
+
 
 # Configuración de logs
 logging.basicConfig(
@@ -25,13 +27,23 @@ class TrainModel(Resource):
         Returns:
             string: Mensaje que muestra que se ha actualizado el DataSet
         """
-        input_data = request.json
-        topic_list = input_data["topic_list"]
-        data_name = input_data["dataset_name"]
+        try:
+            input_data = request.json
+            topic_list = input_data["topic_list"]
+            data_name = input_data["dataset_name"]
 
-        (df_train, df_test) = self.get_examples(topic_list, data_name)
+            # Obtenemos los nuevos datasets solo con la información de los tópicos deseados al 80% y 20%
+            self.logger.info(self.get_examples(topic_list, data_name))
+            df_train, df_test = self.get_examples(topic_list, data_name)
 
-        return "OK"
+            # Preprocesamiento de la información
+            preprocess_train = self.preprocess_pipeline(df_train)
+            preprocess_test = self.preprocess_pipeline(df_test)
+
+            return preprocess_train["text"]
+        
+        except Exception as err:
+            return "Process Error: " + str(err)
 
     def get_examples(self, topic_list, data_name):
         """
@@ -45,7 +57,7 @@ class TrainModel(Resource):
             Ejemplo: 'dataset.csv'
 
         Returns:
-        tuple: Una tupla con dos DataFrames de pandas:
+        tuple: Dos DataFrames de pandas:
             - df_train (pd.DataFrame): Dataset de entrenamiento (80% de los datos)
             - df_test (pd.DataFrame): Dataset de prueba (20% de los datos) 
         """
@@ -70,7 +82,32 @@ class TrainModel(Resource):
             for t in topic_list:
                 self.logger.info("La cantidad de ejemplos de " + t + "es: Entrenamiento -> " + str((df_train['topic'] == t).sum()) + " Test -> " + str((df_test['topic'] == t).sum()))
 
-            return (df_train, df_test)
+            return df_train, df_test
+
+        except Exception as err:
+            return "Process Error: " + str(err)
+
+    def preprocess_pipeline(self, df):
+        """
+        Aquí se realiza el preprocesamiento del texto en los dataframes correspondientes
+        """
+
+        self.logger.info("Preprocesando el Dataframe")
+        
+        try:
+            # Vemos los tópicos únicos
+            unique_topics = df['topic'].unique()
+            topic_to_number = {topic: i+1 for i, topic in enumerate(unique_topics)}
+
+            df['text_filtered'] = df['text'].apply(stopwords_filter)
+
+            new_df = pd.DataFrame({
+                'text': df['text_filtered'],
+                'topic': df['topic'],
+                'output': df['topic'].map(topic_to_number)
+                })
+
+            return new_df
 
         except Exception as err:
             return "Process Error: " + str(err)

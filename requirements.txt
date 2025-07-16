@@ -4,9 +4,11 @@ Flask-API==3.1
 Flask-RESTful==0.3.10
 flask-swagger-ui==4.11.1
 huggingface-hub==0.20.0
+keras
 langchain
+nltk
 numpy
-openai
 pandas
 scikit-learn
 spacy
+tensorflow
