@@ -1,0 +1,46 @@
+{
+    "openapi": "3.0.0",
+
+    "info": {
+        "description": "API para probar servicios con modelos",
+        "version": "0.1.0",
+        "title": "Api",
+        "contact": {
+            "email": "email@gmail.com"
+        },
+        "license": {
+            "name": "Irving Uribe"
+        }
+    },
+
+    "servers": [
+        {
+            "url": "http://localhost:8000/"
+        }
+    ],
+
+    "tags": [
+        {
+            "name": "Prueba de modelos",
+            "description": "Prueba de modelos"
+        }
+    ],
+
+    "paths": { 
+        "/": {
+            "get": {
+                "tags": [
+                    "Reviisón del servicio"
+                ], 
+                "operationId": "/",
+                "summary": "Health Check",
+                "description": "Regresa un valor de 200 si el servicio está dado de alta",
+                "responses": {
+                    "200": {
+                        "description": "Servicio disponible"
+                    }
+                }
+            }
+        }
+    }
+}
