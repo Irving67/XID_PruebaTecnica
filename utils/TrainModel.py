@@ -10,9 +10,10 @@ from tensorflow.keras.utils import to_categorical  # Importar to_categorical
 
 
 from utils.tools.lematizer import lematizer_tokens
+from utils.tools.lstm import lstm
 from utils.tools.stopwords import stopwords_filter
 from utils.tools.text2seq import text_2_seq
-from utils.tools.trainmodel import train_model
+from utils.tools.getembeddings import get_embeddings
 
 
 # Configuración de logs
@@ -39,6 +40,8 @@ class TrainModel(Resource):
             topic_list = input_data["topic_list"]
             data_name = input_data["dataset_name"]
             self.max_tokens = input_data["max_tokens"]
+            self.batch_size_train = input_data["batch_size_train"]
+            self.epochs = input_data["epochs"]
 
             # Obtenemos los nuevos datasets solo con la información de los tópicos deseados al 80% y 20%
             df_train, df_test = self.get_examples(topic_list, data_name)
@@ -84,9 +87,18 @@ class TrainModel(Resource):
             y_train = to_categorical(preprocess_train["output"].values, num_classes=len(unique_topics))
             y_test = to_categorical(preprocess_test["output"].values, num_classes=len(unique_topics))
 
-            train_model(X_train, y_train)
+            X_train_padded, embedding_matrix = get_embeddings(X_train, y_train, tokenizer)
 
-            return "OK"
+            self.logger.info("Iniciando el entrenamiento del modelo LSTM...")
+            model, accuracy = lstm(X_train_padded, embedding_matrix, y_train, X_test, y_test, self.epochs, self.batch_size_train)
+            self.logger.info("Entrenamiento terminado de manera correcta...")
+
+            # Se almacena el modelo para futuras interacciones
+            model_filename = f"data/lstm_model_acc_{accuracy}.h5"
+            model.save(model_filename)
+            self.logger.info(f"Modelo almacenado en {model_filename}")
+
+            return "Entrenamiento exitodso del modelo"
 
         except Exception as err:
             return "Process Error: " + str(err)
@@ -110,12 +122,18 @@ class TrainModel(Resource):
 
         try:
             # Lectura del CSV en el directorio local y creación de Dataset simplificado
-            #df = pd.read_csv('../app/data/' + data_name)
-            df = pd.read_csv('data/' + data_name)
+            df = pd.read_csv('../app/data/' + data_name)
+            #df = pd.read_csv('data/' + data_name)
             df_simple = df[['text', 'summary', 'topic', 'title']]
 
-            # Filtramos solo los elementos del Dataset que contengan los tópicos de la lista
-            df_topic = df_simple[df_simple['topic'].isin(topic_list)].copy()
+            # Filtramos solo los elementos del Dataset que contengan las palabras clave de la lista
+            pattern = '|'.join(topic_list)  # Crear un patrón con las palabras clave separadas por "|"
+            df_topic = df_simple[df_simple['topic'].str.contains(pattern, case=False, na=False)].copy()
+
+            for element in df_topic['topic']:
+                for t in topic_list:
+                    if t in element:
+                        df_topic['topic'] = df_topic['topic'].replace(element, t)
 
             # Dividir manteniendo proporciones por topic
             df_train, df_test = train_test_split(
