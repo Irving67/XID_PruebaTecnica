@@ -2,10 +2,14 @@ import logging
 
 from flask_restful import Resource
 from flask import request
+from tensorflow.keras.preprocessing.text import Tokenizer
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+
+from utils.tools.lematizer import lematizer_tokens
 from utils.tools.stopwords import stopwords_filter
+from utils.tools.text2seq import text_2_seq
 
 
 # Configuración de logs
@@ -31,16 +35,31 @@ class TrainModel(Resource):
             input_data = request.json
             topic_list = input_data["topic_list"]
             data_name = input_data["dataset_name"]
+            self.max_tokens = input_data["max_tokens"]
 
             # Obtenemos los nuevos datasets solo con la información de los tópicos deseados al 80% y 20%
-            self.logger.info(self.get_examples(topic_list, data_name))
             df_train, df_test = self.get_examples(topic_list, data_name)
 
             # Preprocesamiento de la información
             preprocess_train = self.preprocess_pipeline(df_train)
             preprocess_test = self.preprocess_pipeline(df_test)
 
-            return preprocess_train["text"]
+            concat_df = pd.concat([preprocess_train, preprocess_train])
+
+            # Obtenemos la secuencia de texto con un padding
+            tokenizer = Tokenizer()
+            tokenizer.fit_on_texts(concat_df["text"])
+            
+            vectors_train = [text_2_seq(x, self.max_tokens, tokenizer) for x in preprocess_train["text"]]
+            vectors_test = [text_2_seq(x, self.max_tokens, tokenizer) for x in preprocess_test["text"]]
+
+            for e in vectors_train:
+                self.logger.info(e) 
+
+            for e in vectors_test:
+                self.logger.info(e) 
+
+            return "ok"
         
         except Exception as err:
             return "Process Error: " + str(err)
@@ -65,6 +84,7 @@ class TrainModel(Resource):
         try:
             # Lectura del CSV en el directorio local y creación de Dataset simplificado
             df = pd.read_csv('../app/data/' + data_name)
+            #df = pd.read_csv('data/' + data_name)
             df_simple = df[['text', 'summary', 'topic', 'title']]
 
             # Filtramos solo los elementos del Dataset que contengan los tópicos de la lista
@@ -99,10 +119,16 @@ class TrainModel(Resource):
             unique_topics = df['topic'].unique()
             topic_to_number = {topic: i+1 for i, topic in enumerate(unique_topics)}
 
-            df['text_filtered'] = df['text'].apply(stopwords_filter)
+            # ----------------------------------------------
+            # Pipeline de transformaciones y limpieza
+            # ----------------------------------------------
+            # Filtrado de StopWords
+            df['text'] = df['text'].apply(stopwords_filter)
+            # Lematización del Texto y lo tokenizamos
+            df['text'] = df['text'].apply(lematizer_tokens) 
 
             new_df = pd.DataFrame({
-                'text': df['text_filtered'],
+                'text': df["text"],
                 'topic': df['topic'],
                 'output': df['topic'].map(topic_to_number)
                 })
