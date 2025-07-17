@@ -12,12 +12,12 @@ def text_2_seq(vector, max_tokens, tokenizer):
     """
 
     try:
-        # Transforma cada texto en una secuencia de valores enteros
-        X_seq = tokenizer.texts_to_sequences(vector)
+        # Si el vector es una lista, lo convertimos a string
+        if isinstance(vector, list):
+            vector = " ".join(vector)
 
-        # Especificamos la matriz (Con padding de posiciones iguales a maxlen)
-        padded = pad_sequences(X_seq, padding='post', maxlen=max_tokens)
-        return padded
-    
+        # Transforma cada texto en una secuencia de valores enteros
+        return tokenizer.texts_to_sequences([vector])[0][:max_tokens]
+
     except Exception as err:
         return "Process Error: " + str(err)

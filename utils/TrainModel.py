@@ -1,15 +1,18 @@
 import logging
+import pickle
 
 from flask_restful import Resource
 from flask import request
 from tensorflow.keras.preprocessing.text import Tokenizer
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.utils import to_categorical  # Importar to_categorical
 
 
 from utils.tools.lematizer import lematizer_tokens
 from utils.tools.stopwords import stopwords_filter
 from utils.tools.text2seq import text_2_seq
+from utils.tools.trainmodel import train_model
 
 
 # Configuración de logs
@@ -44,23 +47,47 @@ class TrainModel(Resource):
             preprocess_train = self.preprocess_pipeline(df_train)
             preprocess_test = self.preprocess_pipeline(df_test)
 
-            concat_df = pd.concat([preprocess_train, preprocess_train])
+            concat_df = pd.concat([preprocess_train, preprocess_test])
 
             # Obtenemos la secuencia de texto con un padding
             tokenizer = Tokenizer()
+            # Validar que concat_df["text"] es una lista de textos
+            if not isinstance(concat_df["text"], pd.Series) or not all(isinstance(text, str) for text in concat_df["text"]):
+                raise ValueError("La columna 'text' de concat_df debe contener únicamente cadenas de texto.")
+
             tokenizer.fit_on_texts(concat_df["text"])
-            
-            vectors_train = [text_2_seq(x, self.max_tokens, tokenizer) for x in preprocess_train["text"]]
-            vectors_test = [text_2_seq(x, self.max_tokens, tokenizer) for x in preprocess_test["text"]]
 
-            for e in vectors_train:
-                self.logger.info(e) 
+            # Si se desea guardar el tokenizador, se puede hacer con pickle o joblib
+            with open('data/tokenizer.pkl', 'wb') as handle:
+                pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-            for e in vectors_test:
-                self.logger.info(e) 
+            self.logger.info("Tamaño del vocabulario: " + str(len(tokenizer.word_index)))
 
-            return "ok"
-        
+            preprocess_train["text"] = preprocess_train["text"].apply(lambda tokens: " ".join(tokens) if isinstance(tokens, list) else tokens)
+            preprocess_test["text"] = preprocess_test["text"].apply(lambda tokens: " ".join(tokens) if isinstance(tokens, list) else tokens)
+
+            X_train = [text_2_seq(x, self.max_tokens, tokenizer) for x in preprocess_train["text"]]
+            X_test = [text_2_seq(x, self.max_tokens, tokenizer) for x in preprocess_test["text"]]
+
+            # Vemos los tópicos únicos
+            unique_topics = topic_list
+            self.logger.info("Tópicos únicos encontrados: " + str(unique_topics))
+
+            # Crear un diccionario para mapear los tópicos únicos a índices
+            topic_to_index = {topic: idx for idx, topic in enumerate(unique_topics)}
+
+            # Mapear la columna 'output' a índices usando el diccionario
+            preprocess_train["output"] = preprocess_train["output"].map(topic_to_index)
+            preprocess_test["output"] = preprocess_test["output"].map(topic_to_index)
+
+            # Generar One-Hot Encoding para y_train y y_test
+            y_train = to_categorical(preprocess_train["output"].values, num_classes=len(unique_topics))
+            y_test = to_categorical(preprocess_test["output"].values, num_classes=len(unique_topics))
+
+            train_model(X_train, y_train)
+
+            return "OK"
+
         except Exception as err:
             return "Process Error: " + str(err)
 
@@ -83,8 +110,8 @@ class TrainModel(Resource):
 
         try:
             # Lectura del CSV en el directorio local y creación de Dataset simplificado
-            df = pd.read_csv('../app/data/' + data_name)
-            #df = pd.read_csv('data/' + data_name)
+            #df = pd.read_csv('../app/data/' + data_name)
+            df = pd.read_csv('data/' + data_name)
             df_simple = df[['text', 'summary', 'topic', 'title']]
 
             # Filtramos solo los elementos del Dataset que contengan los tópicos de la lista
@@ -115,10 +142,6 @@ class TrainModel(Resource):
         self.logger.info("Preprocesando el Dataframe")
         
         try:
-            # Vemos los tópicos únicos
-            unique_topics = df['topic'].unique()
-            topic_to_number = {topic: i+1 for i, topic in enumerate(unique_topics)}
-
             # ----------------------------------------------
             # Pipeline de transformaciones y limpieza
             # ----------------------------------------------
@@ -130,7 +153,7 @@ class TrainModel(Resource):
             new_df = pd.DataFrame({
                 'text': df["text"],
                 'topic': df['topic'],
-                'output': df['topic'].map(topic_to_number)
+                'output': df['topic']
                 })
 
             return new_df
