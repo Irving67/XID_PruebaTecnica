@@ -7,6 +7,7 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from utils.HealthCheck import Health
 from utils.MLSUM_Get import MLSUM_Get
 from utils.TrainModel import TrainModel
+from utils.Predict import Predict
 
 # Inicializamos la aplicación de Flask
 app = Flask(__name__)
@@ -18,6 +19,8 @@ api.add_resource(MLSUM_Get, "/MLSUM",
                  endpoint="MLSUM")
 api.add_resource(TrainModel, "/train_model",
                  endpoint="train_model")
+api.add_resource(Predict, "/predict",
+                 endpoint="predict")
 
 # Configuración del swagger
 SWAGGER_URL = '/docs'
