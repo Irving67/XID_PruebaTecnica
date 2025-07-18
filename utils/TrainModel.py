@@ -1,4 +1,5 @@
 import logging
+import os
 import pickle
 
 from flask_restful import Resource
@@ -121,9 +122,12 @@ class TrainModel(Resource):
         """
 
         try:
-            # Lectura del CSV en el directorio local y creación de Dataset simplificado
-            df = pd.read_csv('../app/data/' + data_name)
-            #df = pd.read_csv('data/' + data_name)
+            # Verificar si la ruta existe
+            file_path = '../app/data/' + data_name
+            if not os.path.exists(file_path):
+                file_path = 'data/' + data_name  # Ruta alternativa
+            
+            df = pd.read_csv(file_path)
             df_simple = df[['text', 'summary', 'topic', 'title']]
 
             # Filtramos solo los elementos del Dataset que contengan las palabras clave de la lista
